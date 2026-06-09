@@ -5,7 +5,17 @@ import sys
 import os
 import threading
 
-import gi
+try:
+    import gi
+except ModuleNotFoundError:
+    import subprocess
+    result = subprocess.run(
+        ["/usr/bin/python3", "-c", "import site; print(site.getsitepackages()[0])"],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        sys.path.insert(0, result.stdout.strip())
+    import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import GLib, Gio, Gtk, Adw, GObject, Pango
@@ -430,7 +440,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
     def _update_ui_state(self):
         active = vpncore.is_active()
         self.connect_btn.set_sensitive(not active and not self.is_busy)
-        self.disconnect_btn.set_sensitive(active and not self.is_busy)
+        self.disconnect_btn.set_sensitive(not self.is_busy)
         self.refresh_btn.set_sensitive(not self.is_busy)
         self.list_view.set_sensitive(not self.is_busy)
 
@@ -534,10 +544,6 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
         minimize = dialog.minimize_row.get_active()
         vpncore.set_minimize_on_close(minimize)
-        if minimize:
-            self._show_toast("Closing window will hide to system tray")
-        else:
-            self._show_toast("Closing window will quit the app")
 
     def _show_toast(self, msg):
         toast = Adw.Toast.new(msg)

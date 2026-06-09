@@ -222,7 +222,7 @@ def connect_vpn(server, force_proto=None):
                     "+vpn.data", f"auth=SHA1, cipher=AES-128-CBC, data-ciphers=AES-256-GCM:AES-128-GCM:AES-128-CBC, data-ciphers-fallback=AES-128-CBC, connection-type=password, remote={remote_ip}, port={remote_port}"], capture_output=True)
 
     try:
-        up_res = subprocess.run(["timeout", "10s", "nmcli", "connection", "up", CONNECTION_NAME], capture_output=True, text=True)
+        up_res = subprocess.run(["timeout", "20s", "nmcli", "connection", "up", CONNECTION_NAME], capture_output=True, text=True)
 
         if up_res.returncode == 0:
             with open(PID_FILE, "w") as f:
@@ -230,7 +230,7 @@ def connect_vpn(server, force_proto=None):
             return True, "Successfully connected!"
         elif up_res.returncode == 124:
             subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
-            return False, "Connection timed out (>10s)."
+            return False, "Connection timed out (>20s)."
         else:
             subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
             return False, f"Connection failed: {up_res.stderr}"
