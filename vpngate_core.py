@@ -14,14 +14,16 @@ PID_FILE = "/tmp/vpngate-gtk.pid"
 CONFIG_PATH = os.path.expanduser("~/.config/vpngate-gtk/config.json")
 
 api_source = "vpngate"
+minimize_on_close = False
 
 
 def _load_config():
-    global api_source
+    global api_source, minimize_on_close
     try:
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
             api_source = cfg.get("api_source", "vpngate")
+            minimize_on_close = cfg.get("minimize_on_close", False)
     except FileNotFoundError:
         pass
 
@@ -29,7 +31,7 @@ def _load_config():
 def _save_config():
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with open(CONFIG_PATH, 'w') as f:
-        json.dump({"api_source": api_source}, f)
+        json.dump({"api_source": api_source, "minimize_on_close": minimize_on_close}, f)
 
 
 def set_api_source(name):
@@ -47,6 +49,16 @@ def get_api_source_label():
         "vpngate": "VPN Gate (recommended)",
         "ovpnpw": "api.ovpn.pw (fallback)",
     }.get(api_source, "Unknown")
+
+
+def get_minimize_on_close():
+    return minimize_on_close
+
+
+def set_minimize_on_close(value):
+    global minimize_on_close
+    minimize_on_close = value
+    _save_config()
 
 
 _load_config()

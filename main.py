@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
 import os
 import threading
@@ -8,6 +10,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import GLib, Gio, Gtk, Adw, GObject, Pango
 
+from trayer import TrayIcon
 import vpngate_core as vpncore
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -88,6 +91,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._update_ui_state()
         self._load_servers()
         self._stats_timer_id = GLib.timeout_add(3000, self._poll_stats)
+        self.connect('close-request', self._on_close_request)
 
     def _build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
@@ -455,6 +459,12 @@ class VPNClientWindow(Adw.ApplicationWindow):
                 f"DOWN: {down:.1f} KB/s  |  UP: {up:.1f} KB/s  |  PING: {ping}  |  LOSS: {loss}"
             )
 
+    def _on_close_request(self, win):
+        if vpncore.get_minimize_on_close():
+            self.hide()
+            return True
+        return False
+
     def _show_preferences(self, btn):
         dialog = Adw.PreferencesDialog()
 
@@ -489,9 +499,21 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.country_pref_row.set_selected(current_idx)
         country_group.add(self.country_pref_row)
 
+        behavior_group = Adw.PreferencesGroup()
+        behavior_group.set_title("Behavior")
+        behavior_group.set_description("Configure application behavior")
+
+        minimize_row = Adw.SwitchRow()
+        minimize_row.set_title("Minimize on close")
+        minimize_row.set_subtitle("Hide to system tray instead of quitting")
+        minimize_row.set_active(vpncore.get_minimize_on_close())
+        behavior_group.add(minimize_row)
+
         page.add(group)
         page.add(country_group)
+        page.add(behavior_group)
         dialog.add(page)
+        dialog.minimize_row = minimize_row
 
         dialog.connect('closed', self._on_prefs_closed, source_row)
         dialog.present(self)
@@ -510,6 +532,13 @@ class VPNClientWindow(Adw.ApplicationWindow):
             self.filter_country = new_code
             self._apply_sort_filter()
 
+        minimize = dialog.minimize_row.get_active()
+        vpncore.set_minimize_on_close(minimize)
+        if minimize:
+            self._show_toast("Closing window will hide to system tray")
+        else:
+            self._show_toast("Closing window will quit the app")
+
     def _show_toast(self, msg):
         toast = Adw.Toast.new(msg)
         toast.set_timeout(3)
@@ -519,12 +548,38 @@ class VPNClientWindow(Adw.ApplicationWindow):
 class VPNClientApp(Adw.Application):
     def __init__(self):
         super().__init__(application_id='io.github.apicalshark.vpngategtk')
+        self.window = None
+        self.tray = None
 
     def do_activate(self):
+        if self.window is not None:
+            self.window.present()
+            return
         win = VPNClientWindow(self)
+        self.window = win
         win.present()
+
+    def toggle_window(self):
+        if self.window and self.window.is_visible():
+            self.window.hide()
+        else:
+            self.window.present()
 
 
 if __name__ == "__main__":
     app = VPNClientApp()
+
+    tray = TrayIcon(
+        app_id="io.github.apicalshark.vpngategtk",
+        title="VPN Gate Client",
+        icon_name="network-vpn-symbolic"
+    )
+    tray.set_left_click(app.toggle_window)
+    tray.add_menu_item("Show VPN Gate", callback=lambda: app.window.present() if app.window else None)
+    tray.add_menu_item("Hide VPN Gate", callback=lambda: app.window.hide() if app.window else None)
+    tray.add_menu_separator()
+    tray.add_menu_item("Quit", callback=app.quit)
+    tray.setup()
+    app.tray = tray
+
     sys.exit(app.run(sys.argv))
