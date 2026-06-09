@@ -64,10 +64,10 @@ class ServerData(GObject.Object):
         except ValueError:
             return "N/A"
         if speed >= 1000000:
-            return f"{speed / 1000000:.1f} Gbps"
+            return f"{speed / 1000000:.1f} Mbps"
         elif speed >= 1000:
-            return f"{speed / 1000:.0f} Mbps"
-        return f"{speed} Kbps"
+            return f"{speed / 1000:.0f} Kbps"
+        return f"{speed} bps"
 
 
 class VPNClientWindow(Adw.ApplicationWindow):
@@ -518,7 +518,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
 class VPNClientApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id='com.vpngate.gtk')
+        super().__init__(application_id='io.github.apicalshark.vpngategtk')
 
     def do_activate(self):
         win = VPNClientWindow(self)
