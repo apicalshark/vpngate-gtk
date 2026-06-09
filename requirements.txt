@@ -1,0 +1,2 @@
+# System deps: dnf install libadwaita-devel python3-gobject NetworkManager-openvpn
+requests

@@ -1,0 +1,6 @@
+[project]
+name = "vpngate-gtk"
+version = "0.1.0"
+description = "VPN Gate GTK4 Client"
+requires-python = ">=3.12"
+dependencies = ["requests"]
