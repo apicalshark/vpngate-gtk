@@ -379,7 +379,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
             if not filter_udp and not filter_tcp:
                 pass
 
-            if self.filter_region and s.get('CountryShort', '') not in REGION_TO_COUNTRIES.get(self.filter_region, []):
+            if self.filter_region and s.get('CountryShort', '') not in REGION_TO_COUNTRIES.get(self.filter_region, set()):
                 continue
 
             if self.filter_country and s.get('CountryShort', '') != self.filter_country:
