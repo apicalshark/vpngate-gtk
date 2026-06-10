@@ -94,6 +94,8 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.current_sort_key = 'score'
         self.sort_reverse = True
         self.is_busy = False
+        self._connecting = False
+        self._disconnecting = False
         self.filter_country = None
         self.country_entries = [("All", None)]
 
@@ -390,6 +392,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
             return
 
         proto = "tcp" if self.filter_tcp.get_active() else None
+        self._connecting = True
         self._set_busy(True)
         self.status_label.set_text(f"Status: Connecting to {server['IP']}...")
 
@@ -400,6 +403,9 @@ class VPNClientWindow(Adw.ApplicationWindow):
         threading.Thread(target=task, daemon=True).start()
 
     def _on_connect_result(self, success, msg):
+        if not self._connecting:
+            return
+        self._connecting = False
         self._set_busy(False)
         self.status_label.set_text(f"Status: {msg}")
         if success:
@@ -413,8 +419,26 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._update_ui_state()
 
     def _on_disconnect(self, btn):
-        self._set_busy(True)
+        if self._disconnecting:
+            return
+
+        self._disconnecting = True
+
+        if self._connecting:
+            self._connecting = False
+            vpncore.cancel_connect()
+            self.status_label.remove_css_class('status-connecting')
+            self.status_label.set_text("Status: Disconnecting...")
+
+            def task():
+                vpncore.disconnect_vpn()
+                GLib.idle_add(self._on_disconnect_result, True, "VPN disconnected.")
+
+            threading.Thread(target=task, daemon=True).start()
+            return
+
         self.status_label.set_text("Status: Disconnecting...")
+        self._set_busy(True)
 
         def task():
             success, msg = vpncore.disconnect_vpn()
@@ -423,6 +447,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         threading.Thread(target=task, daemon=True).start()
 
     def _on_disconnect_result(self, success, msg):
+        self._disconnecting = False
         self._set_busy(False)
         self.status_label.set_text(f"Status: {msg}")
         self.stats_label.set_text("")
@@ -435,7 +460,6 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.is_busy = busy
         self.refresh_btn.set_sensitive(not busy)
         self.connect_btn.set_sensitive(not busy)
-        self.disconnect_btn.set_sensitive(not busy)
 
     def _update_ui_state(self):
         active = vpncore.is_active()

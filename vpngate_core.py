@@ -13,6 +13,9 @@ CONNECTION_NAME = "vpngate-active"
 PID_FILE = "/tmp/vpngate-gtk.pid"
 CONFIG_PATH = os.path.expanduser("~/.config/vpngate-gtk/config.json")
 
+_connect_process = None
+_connect_cancelled = False
+
 api_source = "vpngate"
 minimize_on_close = False
 
@@ -188,7 +191,18 @@ def get_stats():
     return up_speed, down_speed, ping_val, loss_val
 
 
+def cancel_connect():
+    global _connect_process, _connect_cancelled
+    _connect_cancelled = True
+    if _connect_process:
+        _connect_process.terminate()
+
+
 def connect_vpn(server, force_proto=None):
+    global _connect_process, _connect_cancelled
+    _connect_cancelled = False
+    _connect_process = None
+
     if is_active():
         return False, "Error: A VPN connection is already active. Stop it first."
 
@@ -221,23 +235,38 @@ def connect_vpn(server, force_proto=None):
                     "vpn.secrets", "password=vpn",
                     "+vpn.data", f"auth=SHA1, cipher=AES-128-CBC, data-ciphers=AES-256-GCM:AES-128-GCM:AES-128-CBC, data-ciphers-fallback=AES-128-CBC, connection-type=password, remote={remote_ip}, port={remote_port}"], capture_output=True)
 
-    try:
-        up_res = subprocess.run(["timeout", "20s", "nmcli", "connection", "up", CONNECTION_NAME], capture_output=True, text=True)
+    if _connect_cancelled:
+        subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+        return False, "Connection cancelled."
 
-        if up_res.returncode == 0:
+    try:
+        _connect_process = subprocess.Popen(
+            ["timeout", "20s", "nmcli", "connection", "up", CONNECTION_NAME],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout, stderr = _connect_process.communicate()
+        retcode = _connect_process.returncode
+        _connect_process = None
+
+        if _connect_cancelled:
+            subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+            return False, "Connection cancelled."
+
+        if retcode == 0:
             with open(PID_FILE, "w") as f:
                 f.write(str(os.getpid()))
             return True, "Successfully connected!"
-        elif up_res.returncode == 124:
+        elif retcode == 124:
             subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
             return False, "Connection timed out (>20s)."
         else:
             subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
-            return False, f"Connection failed: {up_res.stderr}"
+            return False, f"Connection failed: {stderr}"
     except Exception as e:
         subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
         return False, str(e)
     finally:
+        _connect_process = None
         if os.path.exists(temp_ovpn):
             os.remove(temp_ovpn)
 
