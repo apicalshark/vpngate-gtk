@@ -32,6 +32,20 @@ def get_flag(country_short):
     return chr(0x1F1E6 + ord(code[0]) - ord('A')) + chr(0x1F1E6 + ord(code[1]) - ord('A'))
 
 
+# Region mapping for filtering
+REGION_TO_COUNTRIES = {
+    "Southeast Asia & Oceania": {"SG", "TH", "MY", "VN", "ID", "PH", "AU", "NZ", "BN", "MM", "KH", "LA", "LK", "PG", "WS", "TO", "FJ", "PW", "TV", "NR", "KI"},
+    "East Asia": {"CN", "TW", "HK", "JP", "KR", "MN", "MO"},
+    "North America": {"US", "CA", "MX"},
+    "Central & South America": {"GT", "HN", "SV", "NI", "CR", "PA", "CU", "JM", "DO", "BB", "TT", "BS", "BZ", "AG", "DM", "GD", "LC", "KN", "PM", "VC", "AI", "MS", "MF", "SX", "CW", "AW", "BO", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "GY", "PY", "UY"},
+    "Europe": {"GB", "DE", "FR", "IT", "ES", "PT", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "PL", "CZ", "HU", "RO", "BG", "GR", "IE", "IS", "AL", "HR", "SI", "SK", "EE", "LV", "LT", "MT", "MU", "CY", "LU", "LI", "MC", "SM", "VA", "AD", "GI", "FO", "CK", "JE", "GG", "IM"},
+    "Africa": {"ZA", "EG", "KE", "NG", "MA", "DZ", "TN", "GH", "ET", "CI", "MU", "SD", "ZM", "MZ", "RW", "BI", "UG", "TZ", "SS", "GW", "SL", "LR", "GN", "BF", "ML", "NE", "TG", "BJ", "GA", "CG", "CD", "AO", "GM", "SN", "MR", "SC", "ST", "DM", "GQ", "CM", "CF", "TD", "ER", "DJ", "SZ", "LS", "BW", "NA"},
+    "South Asia": {"IN", "PK", "BD", "LK", "NP", "BT", "MV"},
+    "West Asia": {"SA", "IR", "IQ", "YE", "AF", "PK", "TJ", "TM", "AZ", "GE", "AM", "IL", "JO", "LB", "SY", "TR"},
+    "North Asia": {"RU", "KZ", "MN", "KG", "AM", "AZ", "BY", "GE", "TJ", "TM"}
+}
+
+
 class ServerData(GObject.Object):
     __gtype_name__ = 'ServerData'
 
@@ -98,6 +112,8 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._disconnecting = False
         self.filter_country = None
         self.country_entries = [("All", None)]
+        self.filter_region = None
+        self.region_entries = [("All regions", None)]
 
         self._build_ui()
         self._update_ui_state()
@@ -324,6 +340,10 @@ class VPNClientWindow(Adw.ApplicationWindow):
                     break
             self.country_entries.append((f"{flag} {long_name}", c))
 
+        self.region_entries = [("All regions", None)]
+        for region_name in sorted(REGION_TO_COUNTRIES.keys()):
+            self.region_entries.append((region_name, region_name))
+
         self._apply_sort_filter()
 
     def _load_servers(self):
@@ -358,6 +378,9 @@ class VPNClientWindow(Adw.ApplicationWindow):
                 continue
             if not filter_udp and not filter_tcp:
                 pass
+
+            if self.filter_region and s.get('CountryShort', '') not in REGION_TO_COUNTRIES.get(self.filter_region, set()):
+                continue
 
             if self.filter_country and s.get('CountryShort', '') != self.filter_country:
                 continue
@@ -533,6 +556,23 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.country_pref_row.set_selected(current_idx)
         country_group.add(self.country_pref_row)
 
+        region_group = Adw.PreferencesGroup()
+        region_group.set_title("Region Filter")
+        region_group.set_description("Only show servers from a specific region")
+
+        region_names = [entry[0] for entry in self.region_entries]
+        region_model = Gtk.StringList.new(region_names)
+        self.region_pref_row = Adw.ComboRow()
+        self.region_pref_row.set_title("Region")
+        self.region_pref_row.set_model(region_model)
+        current_idx = 0
+        for i, (_, region_name) in enumerate(self.region_entries):
+            if region_name == self.filter_region:
+                current_idx = i
+                break
+        self.region_pref_row.set_selected(current_idx)
+        region_group.add(self.region_pref_row)
+
         behavior_group = Adw.PreferencesGroup()
         behavior_group.set_title("Behavior")
         behavior_group.set_description("Configure application behavior")
@@ -545,6 +585,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
         page.add(group)
         page.add(country_group)
+        page.add(region_group)
         page.add(behavior_group)
         dialog.add(page)
         dialog.minimize_row = minimize_row
@@ -564,6 +605,12 @@ class VPNClientWindow(Adw.ApplicationWindow):
         _, new_code = self.country_entries[country_idx]
         if new_code != self.filter_country:
             self.filter_country = new_code
+            self._apply_sort_filter()
+
+        region_idx = self.region_pref_row.get_selected()
+        _, new_region = self.region_entries[region_idx]
+        if new_region != self.filter_region:
+            self.filter_region = new_region
             self._apply_sort_filter()
 
         minimize = dialog.minimize_row.get_active()

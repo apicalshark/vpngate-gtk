@@ -45,7 +45,7 @@ For other linux distribution, please make your own package.
 
 ```bash
 python main.py
-# Or with uv:
+# Or with uv (recommended):
 uv run main.py
 ```
 
