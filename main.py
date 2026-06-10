@@ -34,15 +34,15 @@ def get_flag(country_short):
 
 # Region mapping for filtering
 REGION_TO_COUNTRIES = {
-    "Southeast Asia & Oceania": ["SG", "TH", "MY", "VN", "ID", "PH", "AU", "NZ", "BN", "MM", "KH", "LA", "LK", "PG", "WS", "TO", "FJ", "PW", "TV", "NR", "KI"],
-    "East Asia": ["CN", "TW", "HK", "JP", "KR", "MN", "MO"],
-    "North America": ["US", "CA", "MX", "GT", "HN", "SV", "NI", "CR", "PA", "CU", "JM", "DO", "BB", "TT", "BS", "BZ", "AG", "DM", "GD", "LC", "KN", "PM", "VC", "AI", "MS", "MF", "SX", "CW", "AW", "BO", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "GY", "PY", "UY"],
-    "Central & South America": ["GT", "HN", "SV", "NI", "CR", "PA", "CU", "JM", "DO", "BB", "TT", "BS", "BZ", "AG", "DM", "GD", "LC", "KN", "PM", "VC", "AI", "MS", "MF", "SX", "CW", "AW", "BO", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "GY", "PY", "UY"],
-    "Europe": ["GB", "DE", "FR", "IT", "ES", "PT", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "PL", "CZ", "HU", "RO", "BG", "GR", "IE", "IS", "AL", "HR", "SI", "SK", "EE", "LV", "LT", "MT", "MU", "CY", "LU", "LI", "MC", "SM", "VA", "AD", "GI", "FO", "CK", "JE", "GG", "IM"],
-    "Africa": ["ZA", "EG", "KE", "NG", "MA", "DZ", "TN", "GH", "ET", "CI", "MU", "SD", "ZM", "MZ", "RW", "BI", "UG", "TZ", "SS", "GW", "SL", "LR", "GN", "BF", "ML", "NE", "TG", "BJ", "GA", "CG", "CD", "AO", "GM", "SN", "GN", "ML", "MR", "MU", "SC", "ST", "DM", "NE", "TG", "BJ", "GA", "GQ", "CM", "CF", "TD", "ER", "DJ", "SZ", "LS", "BW", "NA"],
-    "South Asia": ["IN", "PK", "BD", "LK", "NP", "BT", "MV"],
-    "West Asia": ["SA", "IR", "IQ", "YE", "AF", "PK", "TJ", "TM", "AZ", "GE", "AM", "IL", "JO", "LB", "SY", "TR"],
-    "North Asia": ["RU", "KZ", "MN", "KG", "AM", "AZ", "BY", "GE", "KG", "KZ", "MN", "RU", "TJ", "TM"]
+    "Southeast Asia & Oceania": {"SG", "TH", "MY", "VN", "ID", "PH", "AU", "NZ", "BN", "MM", "KH", "LA", "LK", "PG", "WS", "TO", "FJ", "PW", "TV", "NR", "KI"},
+    "East Asia": {"CN", "TW", "HK", "JP", "KR", "MN", "MO"},
+    "North America": {"US", "CA", "MX"},
+    "Central & South America": {"GT", "HN", "SV", "NI", "CR", "PA", "CU", "JM", "DO", "BB", "TT", "BS", "BZ", "AG", "DM", "GD", "LC", "KN", "PM", "VC", "AI", "MS", "MF", "SX", "CW", "AW", "BO", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "GY", "PY", "UY"},
+    "Europe": {"GB", "DE", "FR", "IT", "ES", "PT", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "PL", "CZ", "HU", "RO", "BG", "GR", "IE", "IS", "AL", "HR", "SI", "SK", "EE", "LV", "LT", "MT", "MU", "CY", "LU", "LI", "MC", "SM", "VA", "AD", "GI", "FO", "CK", "JE", "GG", "IM"},
+    "Africa": {"ZA", "EG", "KE", "NG", "MA", "DZ", "TN", "GH", "ET", "CI", "MU", "SD", "ZM", "MZ", "RW", "BI", "UG", "TZ", "SS", "GW", "SL", "LR", "GN", "BF", "ML", "NE", "TG", "BJ", "GA", "CG", "CD", "AO", "GM", "SN", "MR", "SC", "ST", "DM", "GQ", "CM", "CF", "TD", "ER", "DJ", "SZ", "LS", "BW", "NA"},
+    "South Asia": {"IN", "PK", "BD", "LK", "NP", "BT", "MV"},
+    "West Asia": {"SA", "IR", "IQ", "YE", "AF", "PK", "TJ", "TM", "AZ", "GE", "AM", "IL", "JO", "LB", "SY", "TR"},
+    "North Asia": {"RU", "KZ", "MN", "KG", "AM", "AZ", "BY", "GE", "TJ", "TM"}
 }
 
 
