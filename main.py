@@ -603,13 +603,13 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
     def _on_pref_country_changed(self, row, pspec):
         idx = row.get_selected()
-        if idx < len(self.country_entries):
-            _, new_code = self.country_entries[idx]
+        pref_entries = getattr(self, '_pref_country_entries', self.country_entries)
+        if idx < len(pref_entries):
+            _, new_code = pref_entries[idx]
             if new_code != self.filter_country:
                 self.filter_country = new_code
                 vpncore.set_filter_country(new_code)
                 self._apply_sort_filter()
-
     def _on_pref_region_changed(self, row, pspec):
         idx = row.get_selected()
         if idx < len(self.region_entries):
