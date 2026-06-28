@@ -16,25 +16,41 @@ CONFIG_PATH = os.path.expanduser("~/.config/vpngate-gtk/config.json")
 _connect_process = None
 _connect_cancelled = False
 
+# Default settings
 api_source = "vpngate"
 minimize_on_close = False
+filter_country = None
+filter_region = None
+sort_key = "score"
+protocol = "all"
 
 
 def _load_config():
-    global api_source, minimize_on_close
+    global api_source, minimize_on_close, filter_country, filter_region, sort_key, protocol
     try:
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
             api_source = cfg.get("api_source", "vpngate")
             minimize_on_close = cfg.get("minimize_on_close", False)
-    except FileNotFoundError:
+            filter_country = cfg.get("filter_country", None)
+            filter_region = cfg.get("filter_region", None)
+            sort_key = cfg.get("sort_key", "score")
+            protocol = cfg.get("protocol", "all")
+    except (FileNotFoundError, json.JSONDecodeError):
         pass
 
 
 def _save_config():
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with open(CONFIG_PATH, 'w') as f:
-        json.dump({"api_source": api_source, "minimize_on_close": minimize_on_close}, f)
+        json.dump({
+            "api_source": api_source,
+            "minimize_on_close": minimize_on_close,
+            "filter_country": filter_country,
+            "filter_region": filter_region,
+            "sort_key": sort_key,
+            "protocol": protocol
+        }, f, indent=2)
 
 
 def set_api_source(name):
@@ -61,6 +77,46 @@ def get_minimize_on_close():
 def set_minimize_on_close(value):
     global minimize_on_close
     minimize_on_close = value
+    _save_config()
+
+
+def get_filter_country():
+    return filter_country
+
+
+def set_filter_country(value):
+    global filter_country
+    filter_country = value
+    _save_config()
+
+
+def get_filter_region():
+    return filter_region
+
+
+def set_filter_region(value):
+    global filter_region
+    filter_region = value
+    _save_config()
+
+
+def get_sort_key():
+    return sort_key
+
+
+def set_sort_key(value):
+    global sort_key
+    sort_key = value
+    _save_config()
+
+
+def get_protocol():
+    return protocol
+
+
+def set_protocol(value):
+    global protocol
+    protocol = value
     _save_config()
 
 
