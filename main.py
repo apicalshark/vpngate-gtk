@@ -478,7 +478,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
             self.action_btn.remove_css_class('destructive-action')
             self.action_btn.add_css_class('suggested-action')
 
-        self.action_btn.set_sensitive(self._connecting or not self.is_busy)
+        self.action_btn.set_sensitive(not self.is_busy)
         self.refresh_btn.set_sensitive(not self.is_busy)
         self.list_view.set_sensitive(not self.is_busy)
 
@@ -550,8 +550,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         filter_group = Adw.PreferencesGroup()
         filter_group.set_title("Filters")
 
-        self._pref_country_entries = list(self.country_entries)
-        country_names = [entry[0] for entry in self._pref_country_entries]
+        country_names = [entry[0] for entry in self.country_entries]
         country_model = Gtk.StringList.new(country_names)
         country_pref_row = Adw.ComboRow()
         country_pref_row.set_title("Country")
@@ -565,8 +564,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         country_pref_row.connect("notify::selected", self._on_pref_country_changed)
         filter_group.add(country_pref_row)
 
-        self._pref_region_entries = list(self.region_entries)
-        region_names = [entry[0] for entry in self._pref_region_entries]
+        region_names = [entry[0] for entry in self.region_entries]
         region_model = Gtk.StringList.new(region_names)
         region_pref_row = Adw.ComboRow()
         region_pref_row.set_title("Region")
@@ -603,22 +601,22 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
     def _on_pref_country_changed(self, row, pspec):
         idx = row.get_selected()
-        pref_entries = getattr(self, '_pref_country_entries', self.country_entries)
-        if 0 <= idx < len(pref_entries):
-            _, new_code = pref_entries[idx]
+        if idx < len(self.country_entries):
+            _, new_code = self.country_entries[idx]
             if new_code != self.filter_country:
                 self.filter_country = new_code
                 vpncore.set_filter_country(new_code)
                 self._apply_sort_filter()
+
     def _on_pref_region_changed(self, row, pspec):
         idx = row.get_selected()
-        pref_entries = getattr(self, '_pref_region_entries', self.region_entries)
-        if idx < len(pref_entries):
-            _, new_region = pref_entries[idx]
+        if idx < len(self.region_entries):
+            _, new_region = self.region_entries[idx]
             if new_region != self.filter_region:
                 self.filter_region = new_region
                 vpncore.set_filter_region(new_region)
                 self._apply_sort_filter()
+
     def _show_toast(self, msg):
         toast = Adw.Toast.new(msg)
         toast.set_timeout(3)
