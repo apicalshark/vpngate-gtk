@@ -550,7 +550,8 @@ class VPNClientWindow(Adw.ApplicationWindow):
         filter_group = Adw.PreferencesGroup()
         filter_group.set_title("Filters")
 
-        country_names = [entry[0] for entry in self.country_entries]
+        self._pref_country_entries = list(self.country_entries)
+        country_names = [entry[0] for entry in self._pref_country_entries]
         country_model = Gtk.StringList.new(country_names)
         country_pref_row = Adw.ComboRow()
         country_pref_row.set_title("Country")
