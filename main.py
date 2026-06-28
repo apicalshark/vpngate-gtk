@@ -478,7 +478,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
             self.action_btn.remove_css_class('destructive-action')
             self.action_btn.add_css_class('suggested-action')
 
-        self.action_btn.set_sensitive(not self.is_busy)
+        self.action_btn.set_sensitive(self._connecting or not self.is_busy)
         self.refresh_btn.set_sensitive(not self.is_busy)
         self.list_view.set_sensitive(not self.is_busy)
 
