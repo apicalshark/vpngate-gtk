@@ -612,13 +612,13 @@ class VPNClientWindow(Adw.ApplicationWindow):
                 self._apply_sort_filter()
     def _on_pref_region_changed(self, row, pspec):
         idx = row.get_selected()
-        if idx < len(self.region_entries):
-            _, new_region = self.region_entries[idx]
+        pref_entries = getattr(self, '_pref_region_entries', self.region_entries)
+        if idx < len(pref_entries):
+            _, new_region = pref_entries[idx]
             if new_region != self.filter_region:
                 self.filter_region = new_region
                 vpncore.set_filter_region(new_region)
                 self._apply_sort_filter()
-
     def _show_toast(self, msg):
         toast = Adw.Toast.new(msg)
         toast.set_timeout(3)
