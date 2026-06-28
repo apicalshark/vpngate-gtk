@@ -565,7 +565,8 @@ class VPNClientWindow(Adw.ApplicationWindow):
         country_pref_row.connect("notify::selected", self._on_pref_country_changed)
         filter_group.add(country_pref_row)
 
-        region_names = [entry[0] for entry in self.region_entries]
+        self._pref_region_entries = list(self.region_entries)
+        region_names = [entry[0] for entry in self._pref_region_entries]
         region_model = Gtk.StringList.new(region_names)
         region_pref_row = Adw.ComboRow()
         region_pref_row.set_title("Region")
