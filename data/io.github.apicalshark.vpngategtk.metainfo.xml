@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.apicalshark.vpngategtk</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>VPN Gate Client</name>
+  <summary>GTK4 client for VPN Gate public VPN relay servers</summary>
+  <description>
+    <p>
+      VPN Gate Client is a Linux desktop application that connects to VPN Gate
+      public VPN relay servers. It fetches the server list from the VPN Gate
+      project API, displays real-time connection statistics, and manages VPN
+      connections through NetworkManager.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Fetch and display public VPN relay servers worldwide</li>
+      <li>Connect to OpenVPN servers via NetworkManager</li>
+      <li>Real-time connection statistics</li>
+      <li>System tray integration with show/hide/quit</li>
+      <li>Configurable connection preferences</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.apicalshark.vpngategtk.desktop</launchable>
+
+  <url type="homepage">https://github.com/apicalshark/vpngate-gtk</url>
+  <url type="bugtracker">https://github.com/apicalshark/vpngate-gtk/issues</url>
+
+  <developer id="io.github.apicalshark">
+    <name>ApicalShark</name>
+  </developer>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.2.0" date="2026-06-29">
+      <description>
+        <p>Version 0.2.0 release.</p>
+      </description>
+    </release>
+  </releases>
+
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <categories>
+    <category>Network</category>
+    <category>VPN</category>
+  </categories>
+
+  <keywords>
+    <keyword>vpn</keyword>
+    <keyword>gate</keyword>
+    <keyword>openvpn</keyword>
+    <keyword>network</keyword>
+    <keyword>privacy</keyword>
+  </keywords>
+</component>

@@ -648,10 +648,10 @@ class VPNClientApp(Adw.Application):
         about = Adw.AboutWindow(
             transient_for=self.window,
             application_name="VPN Gate Client",
-            application_icon="network-vpn-symbolic",
+            application_icon="vpngate-gtk",
             developer_name="ApicalShark",
-            version="1.1.0",
-            copyright="© 2024 ApicalShark",
+            version="0.2.0",
+            copyright="© 2026 ApicalShark",
             website="https://github.com/apicalshark/vpngate-gtk",
             issue_url="https://github.com/apicalshark/vpngate-gtk/issues",
             license_type=Gtk.License.GPL_3_0
