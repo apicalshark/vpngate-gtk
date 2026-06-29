@@ -191,7 +191,7 @@ def _get_servers_ovpnpw():
         servers = []
         for line in lines[1:]:
             line = line.strip()
-            if not line:
+            if not line or "ovpn.pw/update" in line.lower():
                 continue
             parts = line.split(",")
             if len(parts) < 15:
