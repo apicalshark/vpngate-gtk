@@ -131,6 +131,10 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._stats_timer_id = GLib.timeout_add(3000, self._poll_stats)
         self.connect("close-request", self._on_close_request)
 
+        prefs_action = Gio.SimpleAction.new("preferences", None)
+        prefs_action.connect("activate", lambda a, p: self._show_preferences(None))
+        self.add_action(prefs_action)
+
     def _build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
         self.set_content(self.toast_overlay)
@@ -143,17 +147,13 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
         # 3-dot menu
         menu = Gio.Menu.new()
+        menu.append("Preferences", "win.preferences")
         menu.append("About", "app.about")
 
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("view-more-symbolic")
         menu_button.set_menu_model(menu)
         header.pack_end(menu_button)
-
-        prefs_btn = Gtk.Button(icon_name="preferences-system-symbolic")
-        prefs_btn.set_tooltip_text("Settings")
-        prefs_btn.connect("clicked", self._show_preferences)
-        header.pack_end(prefs_btn)
 
         filter_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_box.set_margin_start(12)
