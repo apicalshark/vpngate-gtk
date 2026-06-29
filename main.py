@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
 import os
@@ -9,15 +10,17 @@ try:
     import gi
 except ModuleNotFoundError:
     import subprocess
+
     result = subprocess.run(
         ["/usr/bin/python3", "-c", "import site; print(site.getsitepackages()[0])"],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     if result.returncode == 0:
         sys.path.insert(0, result.stdout.strip())
     import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 from gi.repository import GLib, Gio, Gtk, Adw, GObject, Pango
 
 from trayer import TrayIcon
@@ -25,14 +28,16 @@ import vpngate_core as vpncore
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
+
 def get_flag(country_short):
     code = country_short.upper()
     if len(code) != 2:
-        return '🌍'
-    return chr(0x1F1E6 + ord(code[0]) - ord('A')) + chr(0x1F1E6 + ord(code[1]) - ord('A'))
+        return "🌍"
+    return chr(0x1F1E6 + ord(code[0]) - ord("A")) + chr(
+        0x1F1E6 + ord(code[1]) - ord("A")
+    )
 
 
-# Region mapping for filtering
 REGION_TO_COUNTRIES = {
     "Southeast Asia & Oceania": {"SG", "TH", "MY", "VN", "ID", "PH", "AU", "NZ", "BN", "MM", "KH", "LA", "LK", "PG", "WS", "TO", "FJ", "PW", "TV", "NR", "KI"},
     "East Asia": {"CN", "TW", "HK", "JP", "KR", "MN", "MO"},
@@ -47,23 +52,23 @@ REGION_TO_COUNTRIES = {
 
 
 class ServerData(GObject.Object):
-    __gtype_name__ = 'ServerData'
+    __gtype_name__ = "ServerData"
 
     def __init__(self, server_dict):
         super().__init__()
         self.server = server_dict
-        self.hostname = server_dict.get('HostName', '')
-        self.ip = server_dict.get('IP', '')
-        self.score_str = server_dict.get('Score', '0')
-        self.ping_str = server_dict.get('Ping', 'N/A')
-        self.speed_str = server_dict.get('Speed', '0')
-        self.country = server_dict.get('CountryLong', '')
-        self.country_short = server_dict.get('CountryShort', '')
-        self.uptime = server_dict.get('Uptime', '0')
-        self.total_users = server_dict.get('TotalUsers', '0')
-        self.total_traffic = server_dict.get('TotalTraffic', '0')
-        self.has_udp = server_dict.get('has_udp', False)
-        self.has_tcp = server_dict.get('has_tcp', False)
+        self.hostname = server_dict.get("HostName", "")
+        self.ip = server_dict.get("IP", "")
+        self.score_str = server_dict.get("Score", "0")
+        self.ping_str = server_dict.get("Ping", "N/A")
+        self.speed_str = server_dict.get("Speed", "0")
+        self.country = server_dict.get("CountryLong", "")
+        self.country_short = server_dict.get("CountryShort", "")
+        self.uptime = server_dict.get("Uptime", "0")
+        self.total_users = server_dict.get("TotalUsers", "0")
+        self.total_traffic = server_dict.get("TotalTraffic", "0")
+        self.has_udp = server_dict.get("has_udp", False)
+        self.has_tcp = server_dict.get("has_tcp", False)
         self.flag = get_flag(self.country_short)
 
     def get_proto_str(self):
@@ -102,24 +107,33 @@ class VPNClientWindow(Adw.ApplicationWindow):
         super().__init__(application=app)
         self.set_title("VPN Gate Client")
         self.set_default_size(420, 760)
+        self.set_resizable(False)
 
         self.all_server_dicts = []
         self.filtered_data = []
-        self.current_sort_key = 'score'
-        self.sort_reverse = True
+
+        # Load persistent settings
+        self.current_sort_key = vpncore.get_sort_key()
+        self.sort_reverse = self.current_sort_key != "country"
+        self.filter_country = vpncore.get_filter_country()
+        self.filter_region = vpncore.get_filter_region()
+        self.current_protocol = vpncore.get_protocol()
+
         self.is_busy = False
         self._connecting = False
         self._disconnecting = False
-        self.filter_country = None
         self.country_entries = [("All", None)]
-        self.filter_region = None
         self.region_entries = [("All regions", None)]
 
         self._build_ui()
         self._update_ui_state()
         self._load_servers()
         self._stats_timer_id = GLib.timeout_add(3000, self._poll_stats)
-        self.connect('close-request', self._on_close_request)
+        self.connect("close-request", self._on_close_request)
+
+        prefs_action = Gio.SimpleAction.new("preferences", None)
+        prefs_action.connect("activate", lambda a, p: self._show_preferences(None))
+        self.add_action(prefs_action)
 
     def _build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
@@ -131,10 +145,15 @@ class VPNClientWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         box.append(header)
 
-        prefs_btn = Gtk.Button(icon_name='preferences-system-symbolic')
-        prefs_btn.set_tooltip_text("Settings")
-        prefs_btn.connect('clicked', self._show_preferences)
-        header.pack_end(prefs_btn)
+        # 3-dot menu
+        menu = Gio.Menu.new()
+        menu.append("Preferences", "win.preferences")
+        menu.append("About", "app.about")
+
+        menu_button = Gtk.MenuButton()
+        menu_button.set_icon_name("view-more-symbolic")
+        menu_button.set_menu_model(menu)
+        header.pack_end(menu_button)
 
         filter_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_box.set_margin_start(12)
@@ -142,23 +161,19 @@ class VPNClientWindow(Adw.ApplicationWindow):
         filter_box.set_margin_top(6)
         filter_box.set_margin_bottom(6)
 
-        self.filter_udp = Gtk.ToggleButton(label="UDP")
-        self.filter_tcp = Gtk.ToggleButton(label="TCP")
-        self.filter_all = Gtk.ToggleButton(label="All")
-        self.filter_udp.set_active(True)
-
-        for btn in (self.filter_udp, self.filter_tcp, self.filter_all):
-            btn.add_css_class('flat')
-            btn.connect('toggled', self._on_filter_toggled)
-            filter_box.append(btn)
-
-        sort_label = Gtk.Label(label="  Sort:")
+        sort_label = Gtk.Label(label="Sort By:")
         filter_box.append(sort_label)
 
-        sort_store = Gtk.StringList.new(['Score', 'Ping', 'Country'])
+        sort_store = Gtk.StringList.new(["Score", "Ping", "Country"])
         self.sort_dropdown = Gtk.DropDown.new(sort_store, None)
-        self.sort_dropdown.set_selected(0)
-        self.sort_dropdown.connect('notify::selected', self._on_sort_changed)
+
+        # Set initial selection from saved setting
+        initial_sort_idx = {"score": 0, "ping": 1, "country": 2}.get(
+            self.current_sort_key, 0
+        )
+        self.sort_dropdown.set_selected(initial_sort_idx)
+
+        self.sort_dropdown.connect("notify::selected", self._on_sort_changed)
         filter_box.append(self.sort_dropdown)
 
         box.append(filter_box)
@@ -166,9 +181,9 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.store = Gio.ListStore.new(ServerData)
         self.selection = Gtk.SingleSelection.new(self.store)
         factory = Gtk.SignalListItemFactory()
-        factory.connect('setup', self._setup_row)
-        factory.connect('bind', self._bind_row)
-        factory.connect('unbind', self._unbind_row)
+        factory.connect("setup", self._setup_row)
+        factory.connect("bind", self._bind_row)
+        factory.connect("unbind", self._unbind_row)
 
         self.list_view = Gtk.ListView.new(self.selection, factory)
         self.list_view.set_vexpand(True)
@@ -183,16 +198,30 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self.status_label.set_margin_end(12)
         self.status_label.set_margin_top(6)
         self.status_label.set_xalign(0)
-        self.status_label.add_css_class('heading')
+        self.status_label.set_max_width_chars(45)
+        self.status_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.status_label.add_css_class("heading")
         box.append(self.status_label)
 
-        self.stats_label = Gtk.Label(label="")
-        self.stats_label.set_margin_start(12)
-        self.stats_label.set_margin_end(12)
-        self.stats_label.set_margin_bottom(6)
-        self.stats_label.set_xalign(0)
-        self.stats_label.add_css_class('dim-label')
-        box.append(self.stats_label)
+        stats_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        stats_box.set_margin_start(12)
+        stats_box.set_margin_end(12)
+        stats_box.set_margin_bottom(6)
+
+        self.stats_down_label = Gtk.Label(label="")
+        self.stats_down_label.add_css_class("dim-label")
+        self.stats_up_label = Gtk.Label(label="")
+        self.stats_up_label.add_css_class("dim-label")
+        self.stats_ping_label = Gtk.Label(label="")
+        self.stats_ping_label.add_css_class("dim-label")
+        self.stats_loss_label = Gtk.Label(label="")
+        self.stats_loss_label.add_css_class("dim-label")
+
+        stats_box.append(self.stats_down_label)
+        stats_box.append(self.stats_up_label)
+        stats_box.append(self.stats_ping_label)
+        stats_box.append(self.stats_loss_label)
+        box.append(stats_box)
 
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         action_box.set_margin_start(12)
@@ -201,29 +230,28 @@ class VPNClientWindow(Adw.ApplicationWindow):
         action_box.set_margin_bottom(12)
 
         self.refresh_btn = Gtk.Button(label="Refresh")
-        self.refresh_btn.connect('clicked', lambda b: self._load_servers())
+        self.refresh_btn.set_hexpand(True)
+        self.refresh_btn.connect("clicked", lambda b: self._load_servers())
 
-        self.connect_btn = Gtk.Button(label="Connect")
-        self.connect_btn.add_css_class('suggested-action')
-        self.connect_btn.connect('clicked', self._on_connect)
-
-        self.disconnect_btn = Gtk.Button(label="Disconnect")
-        self.disconnect_btn.add_css_class('destructive-action')
-        self.disconnect_btn.connect('clicked', self._on_disconnect)
+        self.action_btn = Gtk.Button(label="Connect")
+        self.action_btn.set_hexpand(True)
+        self.action_btn.add_css_class("suggested-action")
+        self.action_btn.connect("clicked", self._on_action_clicked)
 
         action_box.append(self.refresh_btn)
-        action_box.append(self.connect_btn)
-        action_box.append(self.disconnect_btn)
+        action_box.append(self.action_btn)
         box.append(action_box)
 
         css_provider = Gtk.CssProvider()
-        css_provider.load_from_bytes(GLib.Bytes.new(b"""
+        css_provider.load_from_bytes(
+            GLib.Bytes.new(b"""
             .ping-badge { background: @accent_bg_color; color: @accent_fg_color;
                           border-radius: 8px; padding: 2px 8px; font-size: 12px; }
             .status-connecting { color: #ffa348; }
             .status-connected { color: #33d17a; }
             .status-error { color: #e01b24; }
-        """))
+        """)
+        )
         Gtk.StyleContext.add_provider_for_display(
             self.get_display(), css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -238,18 +266,18 @@ class VPNClientWindow(Adw.ApplicationWindow):
         top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         flag = Gtk.Label()
         flag.set_xalign(0)
-        flag.add_css_class('heading')
+        flag.add_css_class("heading")
         country = Gtk.Label()
         country.set_xalign(0)
         country.set_hexpand(True)
         country.set_ellipsize(Pango.EllipsizeMode.END)
         speed = Gtk.Label()
         speed.set_xalign(1)
-        speed.add_css_class('dim-label')
-        speed.add_css_class('caption')
+        speed.add_css_class("dim-label")
+        speed.add_css_class("caption")
         ping = Gtk.Label()
         ping.set_xalign(1)
-        ping.add_css_class('ping-badge')
+        ping.add_css_class("ping-badge")
         top.append(flag)
         top.append(country)
         top.append(speed)
@@ -259,12 +287,12 @@ class VPNClientWindow(Adw.ApplicationWindow):
         host = Gtk.Label()
         host.set_xalign(0)
         host.set_hexpand(True)
-        host.add_css_class('caption')
-        host.add_css_class('dim-label')
+        host.add_css_class("caption")
+        host.add_css_class("dim-label")
         proto = Gtk.Label()
         proto.set_xalign(1)
-        proto.add_css_class('caption')
-        proto.add_css_class('dim-label')
+        proto.add_css_class("caption")
+        proto.add_css_class("dim-label")
         bot.append(host)
         bot.append(proto)
 
@@ -293,50 +321,31 @@ class VPNClientWindow(Adw.ApplicationWindow):
     def _unbind_row(self, factory, list_item):
         pass
 
-    def _on_filter_toggled(self, btn):
-        if not btn.get_active():
-            return
-        if btn == self.filter_udp:
-            self.filter_tcp.set_active(False)
-            self.filter_all.set_active(False)
-        elif btn == self.filter_tcp:
-            self.filter_udp.set_active(False)
-            self.filter_all.set_active(False)
-        elif btn == self.filter_all:
-            self.filter_udp.set_active(False)
-            self.filter_tcp.set_active(False)
-        self._apply_sort_filter()
-
     def _on_sort_changed(self, dropdown, pspec):
         idx = dropdown.get_selected()
-        key_map = {0: 'score', 1: 'ping', 2: 'country'}
-        new_key = key_map.get(idx, 'score')
-        if new_key == self.current_sort_key:
-            self.sort_reverse = not self.sort_reverse
-        else:
+        key_map = {0: "score", 1: "ping", 2: "country"}
+        new_key = key_map.get(idx, "score")
+        if new_key != self.current_sort_key:
             self.current_sort_key = new_key
-            self.sort_reverse = (new_key != 'country')
-        self._apply_sort_filter()
+            self.sort_reverse = new_key != "country"
+            vpncore.set_sort_key(new_key)
+            self._apply_sort_filter()
 
     def _on_refresh(self, servers):
         self.all_server_dicts = servers
         for i, s in enumerate(self.all_server_dicts):
-            s['gui_idx'] = i
+            s["gui_idx"] = i
 
-        short_codes = sorted(set(
-            s.get('CountryShort', '--') for s in servers
-            if s.get('CountryShort')
-        ))
+        short_codes = sorted(
+            set(s.get("CountryShort", "--") for s in servers if s.get("CountryShort"))
+        )
         self.country_entries = [("All", None)]
         for c in short_codes:
             flag = get_flag(c)
-            long_name = s.get('CountryLong', c) if any(
-                s.get('CountryShort') == c and s.get('CountryLong')
-                for s in servers
-            ) else c
+            long_name = c
             for s in servers:
-                if s.get('CountryShort') == c and s.get('CountryLong'):
-                    long_name = s['CountryLong']
+                if s.get("CountryShort") == c and s.get("CountryLong"):
+                    long_name = s["CountryLong"]
                     break
             self.country_entries.append((f"{flag} {long_name}", c))
 
@@ -347,9 +356,9 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._apply_sort_filter()
 
     def _load_servers(self):
-        self.status_label.remove_css_class('status-connected')
-        self.status_label.remove_css_class('status-error')
-        self.status_label.add_css_class('status-connecting')
+        self.status_label.remove_css_class("status-connected")
+        self.status_label.remove_css_class("status-error")
+        self.status_label.add_css_class("status-connecting")
 
         def task():
             servers = vpncore.get_servers()
@@ -358,31 +367,28 @@ class VPNClientWindow(Adw.ApplicationWindow):
         threading.Thread(target=task, daemon=True).start()
 
     def _sort_key(self, sd):
-        if self.current_sort_key == 'score':
+        if self.current_sort_key == "score":
             return sd.get_score_int()
-        elif self.current_sort_key == 'ping':
+        elif self.current_sort_key == "ping":
             return sd.get_ping_int()
-        elif self.current_sort_key == 'country':
+        elif self.current_sort_key == "country":
             return sd.country.lower()
         return 0
 
     def _apply_sort_filter(self):
-        filter_udp = self.filter_udp.get_active()
-        filter_tcp = self.filter_tcp.get_active()
-
         filtered = []
         for s in self.all_server_dicts:
-            if filter_udp and not s.get('has_udp', False):
+            if self.current_protocol == "udp" and not s.get("has_udp", False):
                 continue
-            if filter_tcp and not s.get('has_tcp', False):
-                continue
-            if not filter_udp and not filter_tcp:
-                pass
-
-            if self.filter_region and s.get('CountryShort', '') not in REGION_TO_COUNTRIES.get(self.filter_region, set()):
+            if self.current_protocol == "tcp" and not s.get("has_tcp", False):
                 continue
 
-            if self.filter_country and s.get('CountryShort', '') != self.filter_country:
+            if self.filter_region and s.get(
+                "CountryShort", ""
+            ) not in REGION_TO_COUNTRIES.get(self.filter_region, set()):
+                continue
+
+            if self.filter_country and s.get("CountryShort", "") != self.filter_country:
                 continue
 
             filtered.append(s)
@@ -404,17 +410,19 @@ class VPNClientWindow(Adw.ApplicationWindow):
         item = self.selection.get_item(pos)
         return item.server if item else None
 
-    def _on_connect(self, btn):
-        if vpncore.is_active():
-            self._show_toast("A VPN is already active. Disconnect first.")
-            return
+    def _on_action_clicked(self, btn):
+        if vpncore.is_active() or self._connecting:
+            self._on_disconnect()
+        else:
+            self._on_connect()
 
+    def _on_connect(self):
         server = self._get_selected_server()
         if not server:
             self._show_toast("Select a server first.")
             return
 
-        proto = "tcp" if self.filter_tcp.get_active() else None
+        proto = self.current_protocol if self.current_protocol != "all" else None
         self._connecting = True
         self._set_busy(True)
         self.status_label.set_text(f"Status: Connecting to {server['IP']}...")
@@ -430,18 +438,20 @@ class VPNClientWindow(Adw.ApplicationWindow):
             return
         self._connecting = False
         self._set_busy(False)
-        self.status_label.set_text(f"Status: {msg}")
         if success:
-            self.status_label.remove_css_class('status-connecting')
-            self.status_label.remove_css_class('status-error')
-            self.status_label.add_css_class('status-connected')
+            self.status_label.set_text(f"Status: {msg}")
+            self.status_label.remove_css_class("status-connecting")
+            self.status_label.remove_css_class("status-error")
+            self.status_label.add_css_class("status-connected")
         else:
-            self.status_label.remove_css_class('status-connecting')
-            self.status_label.remove_css_class('status-connected')
-            self.status_label.add_css_class('status-error')
+            self.status_label.set_text("Status: DISCONNECTED")
+            self.status_label.remove_css_class("status-connecting")
+            self.status_label.remove_css_class("status-connected")
+            self.status_label.add_css_class("status-error")
+            self._show_toast(msg)
         self._update_ui_state()
 
-    def _on_disconnect(self, btn):
+    def _on_disconnect(self):
         if self._disconnecting:
             return
 
@@ -450,7 +460,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         if self._connecting:
             self._connecting = False
             vpncore.cancel_connect()
-            self.status_label.remove_css_class('status-connecting')
+            self.status_label.remove_css_class("status-connecting")
             self.status_label.set_text("Status: Disconnecting...")
 
             def task():
@@ -473,32 +483,49 @@ class VPNClientWindow(Adw.ApplicationWindow):
         self._disconnecting = False
         self._set_busy(False)
         self.status_label.set_text(f"Status: {msg}")
-        self.stats_label.set_text("")
-        self.status_label.remove_css_class('status-connected')
-        self.status_label.remove_css_class('status-connecting')
-        self.status_label.remove_css_class('status-error')
+        self.stats_down_label.set_text("")
+        self.stats_up_label.set_text("")
+        self.stats_ping_label.set_text("")
+        self.stats_loss_label.set_text("")
+        self.status_label.remove_css_class("status-connected")
+        self.status_label.remove_css_class("status-connecting")
+        self.status_label.remove_css_class("status-error")
         self._update_ui_state()
 
     def _set_busy(self, busy):
         self.is_busy = busy
-        self.refresh_btn.set_sensitive(not busy)
-        self.connect_btn.set_sensitive(not busy)
+        self._update_ui_state()
 
     def _update_ui_state(self):
-        active = vpncore.is_active()
-        self.connect_btn.set_sensitive(not active and not self.is_busy)
-        self.disconnect_btn.set_sensitive(not self.is_busy)
-        self.refresh_btn.set_sensitive(not self.is_busy)
-        self.list_view.set_sensitive(not self.is_busy)
+        active = vpncore.is_active() or self._connecting
+
+        if active:
+            self.action_btn.set_label("Disconnect")
+            self.action_btn.remove_css_class("suggested-action")
+            self.action_btn.add_css_class("destructive-action")
+        else:
+            self.action_btn.set_label("Connect")
+            self.action_btn.remove_css_class("destructive-action")
+            self.action_btn.add_css_class("suggested-action")
+
+        self.action_btn.set_sensitive(True)
+        self.refresh_btn.set_sensitive(True)
+        self.list_view.set_sensitive(True)
 
     def _poll_stats(self):
         if self.is_busy:
             return True
 
         if not vpncore.is_active():
-            if "ACTIVE" in self.status_label.get_text() or "CONNECTED" in self.status_label.get_text():
+            if (
+                "ACTIVE" in self.status_label.get_text()
+                or "CONNECTED" in self.status_label.get_text()
+            ):
                 self.status_label.set_text("Status: DISCONNECTED")
-                self.stats_label.set_text("")
+                self.stats_down_label.set_text("")
+                self.stats_up_label.set_text("")
+                self.stats_ping_label.set_text("")
+                self.stats_loss_label.set_text("")
                 self._update_ui_state()
             return True
 
@@ -512,9 +539,10 @@ class VPNClientWindow(Adw.ApplicationWindow):
     def _update_stats(self, stats):
         if stats and not self.is_busy:
             up, down, ping, loss = stats
-            self.stats_label.set_text(
-                f"DOWN: {down:.1f} KB/s  |  UP: {up:.1f} KB/s  |  PING: {ping}  |  LOSS: {loss}"
-            )
+            self.stats_down_label.set_text(f"↓ {down:.1f} KB/s")
+            self.stats_up_label.set_text(f"↑ {up:.1f} KB/s")
+            self.stats_ping_label.set_text(f"PING: {ping}")
+            self.stats_loss_label.set_text(f"LOSS: {loss}")
 
     def _on_close_request(self, win):
         if vpncore.get_minimize_on_close():
@@ -523,98 +551,110 @@ class VPNClientWindow(Adw.ApplicationWindow):
         return False
 
     def _show_preferences(self, btn):
-        dialog = Adw.PreferencesDialog()
+        dialog = Adw.PreferencesWindow()
+        dialog.set_transient_for(self)
 
         page = Adw.PreferencesPage()
         page.set_title("Settings")
 
         group = Adw.PreferencesGroup()
-        group.set_title("Data Source")
-        group.set_description("Choose the VPN server list source")
+        group.set_title("General")
 
         source_row = Adw.ComboRow()
         source_row.set_title("API Source")
-        model = Gtk.StringList.new(["VPN Gate (recommended)", "api.ovpn.pw (fallback)"])
-        source_row.set_model(model)
+        source_model = Gtk.StringList.new(
+            ["VPN Gate (recommended)", "api.ovpn.pw (fallback)"]
+        )
+        source_row.set_model(source_model)
         source_row.set_selected(0 if vpncore.get_api_source() == "vpngate" else 1)
+        source_row.connect("notify::selected", self._on_pref_source_changed)
         group.add(source_row)
 
-        country_group = Adw.PreferencesGroup()
-        country_group.set_title("Country Filter")
-        country_group.set_description("Only show servers from a specific country")
-
-        country_names = [entry[0] for entry in self.country_entries]
-        country_model = Gtk.StringList.new(country_names)
-        self.country_pref_row = Adw.ComboRow()
-        self.country_pref_row.set_title("Country")
-        self.country_pref_row.set_model(country_model)
-        current_idx = 0
-        for i, (_, code) in enumerate(self.country_entries):
-            if code == self.filter_country:
-                current_idx = i
-                break
-        self.country_pref_row.set_selected(current_idx)
-        country_group.add(self.country_pref_row)
-
-        region_group = Adw.PreferencesGroup()
-        region_group.set_title("Region Filter")
-        region_group.set_description("Only show servers from a specific region")
-
-        region_names = [entry[0] for entry in self.region_entries]
-        region_model = Gtk.StringList.new(region_names)
-        self.region_pref_row = Adw.ComboRow()
-        self.region_pref_row.set_title("Region")
-        self.region_pref_row.set_model(region_model)
-        current_idx = 0
-        for i, (_, region_name) in enumerate(self.region_entries):
-            if region_name == self.filter_region:
-                current_idx = i
-                break
-        self.region_pref_row.set_selected(current_idx)
-        region_group.add(self.region_pref_row)
-
-        behavior_group = Adw.PreferencesGroup()
-        behavior_group.set_title("Behavior")
-        behavior_group.set_description("Configure application behavior")
+        proto_row = Adw.ComboRow()
+        proto_row.set_title("Protocol")
+        proto_model = Gtk.StringList.new(["All", "UDP", "TCP"])
+        proto_row.set_model(proto_model)
+        proto_idx = {"all": 0, "udp": 1, "tcp": 2}.get(self.current_protocol, 0)
+        proto_row.set_selected(proto_idx)
+        proto_row.connect("notify::selected", self._on_pref_proto_changed)
+        group.add(proto_row)
 
         minimize_row = Adw.SwitchRow()
         minimize_row.set_title("Minimize on close")
         minimize_row.set_subtitle("Hide to system tray instead of quitting")
         minimize_row.set_active(vpncore.get_minimize_on_close())
-        behavior_group.add(minimize_row)
+        minimize_row.connect("notify::active", self._on_pref_minimize_changed)
+        group.add(minimize_row)
+
+        filter_group = Adw.PreferencesGroup()
+        filter_group.set_title("Filters")
+
+        country_names = [entry[0] for entry in self.country_entries]
+        country_model = Gtk.StringList.new(country_names)
+        country_pref_row = Adw.ComboRow()
+        country_pref_row.set_title("Country")
+        country_pref_row.set_model(country_model)
+        current_idx = 0
+        for i, (_, code) in enumerate(self.country_entries):
+            if code == self.filter_country:
+                current_idx = i
+                break
+        country_pref_row.set_selected(current_idx)
+        country_pref_row.connect("notify::selected", self._on_pref_country_changed)
+        filter_group.add(country_pref_row)
+
+        region_names = [entry[0] for entry in self.region_entries]
+        region_model = Gtk.StringList.new(region_names)
+        region_pref_row = Adw.ComboRow()
+        region_pref_row.set_title("Region")
+        region_pref_row.set_model(region_model)
+        current_region_idx = 0
+        for i, (_, region_name) in enumerate(self.region_entries):
+            if region_name == self.filter_region:
+                current_region_idx = i
+                break
+        region_pref_row.set_selected(current_region_idx)
+        region_pref_row.connect("notify::selected", self._on_pref_region_changed)
+        filter_group.add(region_pref_row)
 
         page.add(group)
-        page.add(country_group)
-        page.add(region_group)
-        page.add(behavior_group)
+        page.add(filter_group)
         dialog.add(page)
-        dialog.minimize_row = minimize_row
+        dialog.present()
 
-        dialog.connect('closed', self._on_prefs_closed, source_row)
-        dialog.present(self)
-
-    def _on_prefs_closed(self, dialog, source_row):
-        selected_source = source_row.get_selected()
-        new_source = "vpngate" if selected_source == 0 else "ovpnpw"
+    def _on_pref_source_changed(self, row, pspec):
+        new_source = "vpngate" if row.get_selected() == 0 else "ovpnpw"
         if new_source != vpncore.get_api_source():
             vpncore.set_api_source(new_source)
-            self._show_toast(f"Switched to {vpncore.get_api_source_label()}")
             self._load_servers()
 
-        country_idx = self.country_pref_row.get_selected()
-        _, new_code = self.country_entries[country_idx]
-        if new_code != self.filter_country:
-            self.filter_country = new_code
+    def _on_pref_proto_changed(self, row, pspec):
+        new_proto = {0: "all", 1: "udp", 2: "tcp"}.get(row.get_selected(), "all")
+        if new_proto != self.current_protocol:
+            self.current_protocol = new_proto
+            vpncore.set_protocol(new_proto)
             self._apply_sort_filter()
 
-        region_idx = self.region_pref_row.get_selected()
-        _, new_region = self.region_entries[region_idx]
-        if new_region != self.filter_region:
-            self.filter_region = new_region
-            self._apply_sort_filter()
+    def _on_pref_minimize_changed(self, row, pspec):
+        vpncore.set_minimize_on_close(row.get_active())
 
-        minimize = dialog.minimize_row.get_active()
-        vpncore.set_minimize_on_close(minimize)
+    def _on_pref_country_changed(self, row, pspec):
+        idx = row.get_selected()
+        if 0 <= idx < len(self.country_entries):
+            _, new_code = self.country_entries[idx]
+            if new_code != self.filter_country:
+                self.filter_country = new_code
+                vpncore.set_filter_country(new_code)
+                self._apply_sort_filter()
+
+    def _on_pref_region_changed(self, row, pspec):
+        idx = row.get_selected()
+        if 0 <= idx < len(self.region_entries):
+            _, new_region = self.region_entries[idx]
+            if new_region != self.filter_region:
+                self.filter_region = new_region
+                vpncore.set_filter_region(new_region)
+                self._apply_sort_filter()
 
     def _show_toast(self, msg):
         toast = Adw.Toast.new(msg)
@@ -624,7 +664,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
 
 class VPNClientApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id='io.github.apicalshark.vpngategtk')
+        super().__init__(application_id="io.github.apicalshark.vpngategtk")
         self.window = None
         self.tray = None
 
@@ -635,6 +675,27 @@ class VPNClientApp(Adw.Application):
         win = VPNClientWindow(self)
         self.window = win
         win.present()
+
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+
+        action = Gio.SimpleAction.new("about", None)
+        action.connect("activate", self._show_about)
+        self.add_action(action)
+
+    def _show_about(self, action, param):
+        about = Adw.AboutWindow(
+            transient_for=self.window,
+            application_name="VPN Gate Client",
+            application_icon="vpngate-gtk",
+            developer_name="ApicalShark",
+            version="0.2.0",
+            copyright="© 2026 ApicalShark",
+            website="https://github.com/apicalshark/vpngate-gtk",
+            issue_url="https://github.com/apicalshark/vpngate-gtk/issues",
+            license_type=Gtk.License.GPL_3_0,
+        )
+        about.present()
 
     def toggle_window(self):
         if self.window and self.window.is_visible():
@@ -649,11 +710,15 @@ if __name__ == "__main__":
     tray = TrayIcon(
         app_id="io.github.apicalshark.vpngategtk",
         title="VPN Gate Client",
-        icon_name="network-vpn-symbolic"
+        icon_name="network-vpn-symbolic",
     )
     tray.set_left_click(app.toggle_window)
-    tray.add_menu_item("Show VPN Gate", callback=lambda: app.window.present() if app.window else None)
-    tray.add_menu_item("Hide VPN Gate", callback=lambda: app.window.hide() if app.window else None)
+    tray.add_menu_item(
+        "Show VPN Gate", callback=lambda: app.window.present() if app.window else None
+    )
+    tray.add_menu_item(
+        "Hide VPN Gate", callback=lambda: app.window.hide() if app.window else None
+    )
     tray.add_menu_separator()
     tray.add_menu_item("Quit", callback=app.quit)
     tray.setup()
