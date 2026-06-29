@@ -26,7 +26,13 @@ protocol = "all"
 
 
 def _load_config():
-    global api_source, minimize_on_close, filter_country, filter_region, sort_key, protocol
+    global \
+        api_source, \
+        minimize_on_close, \
+        filter_country, \
+        filter_region, \
+        sort_key, \
+        protocol
     try:
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
@@ -41,16 +47,23 @@ def _load_config():
 
 
 def _save_config():
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, 'w') as f:
-        json.dump({
-            "api_source": api_source,
-            "minimize_on_close": minimize_on_close,
-            "filter_country": filter_country,
-            "filter_region": filter_region,
-            "sort_key": sort_key,
-            "protocol": protocol
-        }, f, indent=2)
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(
+                {
+                    "api_source": api_source,
+                    "minimize_on_close": minimize_on_close,
+                    "filter_country": filter_country,
+                    "filter_region": filter_region,
+                    "sort_key": sort_key,
+                    "protocol": protocol,
+                },
+                f,
+                indent=2,
+            )
+    except Exception as e:
+        print(f"Error saving configuration: {e}")
 
 
 def set_api_source(name):
@@ -148,12 +161,17 @@ def _get_servers_vpngate():
             server = dict(zip(header, parts))
 
             try:
-                config_data = base64.b64decode(server['OpenVPN_ConfigData_Base64']).decode('utf-8', errors='ignore')
-                server['has_udp'] = "proto udp" in config_data.lower()
-                server['has_tcp'] = "proto tcp" in config_data.lower() or "proto udp" not in config_data.lower()
-                server['config_text'] = config_data
+                config_data = base64.b64decode(
+                    server["OpenVPN_ConfigData_Base64"]
+                ).decode("utf-8", errors="ignore")
+                server["has_udp"] = "proto udp" in config_data.lower()
+                server["has_tcp"] = (
+                    "proto tcp" in config_data.lower()
+                    or "proto udp" not in config_data.lower()
+                )
+                server["config_text"] = config_data
                 servers.append(server)
-            except:
+            except Exception:
                 continue
         return servers
     except Exception as e:
@@ -181,12 +199,17 @@ def _get_servers_ovpnpw():
             server = dict(zip(header, parts))
 
             try:
-                config_data = base64.b64decode(server['OpenVPN_ConfigData_Base64']).decode('utf-8', errors='ignore')
-                server['has_udp'] = "proto udp" in config_data.lower()
-                server['has_tcp'] = "proto tcp" in config_data.lower() or "proto udp" not in config_data.lower()
-                server['config_text'] = config_data
+                config_data = base64.b64decode(
+                    server["OpenVPN_ConfigData_Base64"]
+                ).decode("utf-8", errors="ignore")
+                server["has_udp"] = "proto udp" in config_data.lower()
+                server["has_tcp"] = (
+                    "proto tcp" in config_data.lower()
+                    or "proto udp" not in config_data.lower()
+                )
+                server["config_text"] = config_data
                 servers.append(server)
-            except:
+            except Exception:
                 continue
         return servers
     except Exception as e:
@@ -195,7 +218,11 @@ def _get_servers_ovpnpw():
 
 
 def is_active():
-    res = subprocess.run(["nmcli", "-t", "-f", "NAME,STATE", "connection", "show", "--active"], capture_output=True, text=True)
+    res = subprocess.run(
+        ["nmcli", "-t", "-f", "NAME,STATE", "connection", "show", "--active"],
+        capture_output=True,
+        text=True,
+    )
     return CONNECTION_NAME in res.stdout
 
 
@@ -203,7 +230,11 @@ def get_stats():
     if not is_active():
         return None
 
-    res = subprocess.run(["nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show", "--active"], capture_output=True, text=True)
+    res = subprocess.run(
+        ["nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show", "--active"],
+        capture_output=True,
+        text=True,
+    )
     device = None
     for line in res.stdout.splitlines():
         if line.startswith(CONNECTION_NAME):
@@ -220,7 +251,7 @@ def get_stats():
                     if device in line:
                         parts = line.split()
                         return int(parts[1]), int(parts[9])
-        except:
+        except Exception:
             pass
         return 0, 0
 
@@ -231,7 +262,9 @@ def get_stats():
     down_speed = (b2_rx - b1_rx) / 1024
     up_speed = (b2_tx - b1_tx) / 1024
 
-    ping_res = subprocess.run(["ping", "-c", "3", "-W", "2", "8.8.8.8"], capture_output=True, text=True)
+    ping_res = subprocess.run(
+        ["ping", "-c", "3", "-W", "2", "8.8.8.8"], capture_output=True, text=True
+    )
     ping_val = "N/A"
     loss_val = "100%"
 
@@ -262,50 +295,91 @@ def connect_vpn(server, force_proto=None):
     if is_active():
         return False, "Error: A VPN connection is already active. Stop it first."
 
-    config_data = server['config_text']
+    config_data = server["config_text"]
 
-    if force_proto == "tcp" and "proto tcp" in config_data.lower() and "proto udp" in config_data.lower():
-        config_data = re.sub(r"^proto udp", ";proto udp", config_data, flags=re.MULTILINE | re.IGNORECASE)
-        config_data = re.sub(r"^[; \t]*proto tcp", "proto tcp", config_data, flags=re.MULTILINE | re.IGNORECASE)
-    elif force_proto == "udp" and "proto udp" in config_data.lower() and "proto tcp" in config_data.lower():
-        config_data = re.sub(r"^proto tcp", ";proto tcp", config_data, flags=re.MULTILINE | re.IGNORECASE)
-        config_data = re.sub(r"^[; \t]*proto udp", "proto udp", config_data, flags=re.MULTILINE | re.IGNORECASE)
+    if (
+        force_proto == "tcp"
+        and "proto tcp" in config_data.lower()
+        and "proto udp" in config_data.lower()
+    ):
+        config_data = re.sub(
+            r"^proto udp", ";proto udp", config_data, flags=re.MULTILINE | re.IGNORECASE
+        )
+        config_data = re.sub(
+            r"^[; \t]*proto tcp",
+            "proto tcp",
+            config_data,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
+    elif (
+        force_proto == "udp"
+        and "proto udp" in config_data.lower()
+        and "proto tcp" in config_data.lower()
+    ):
+        config_data = re.sub(
+            r"^proto tcp", ";proto tcp", config_data, flags=re.MULTILINE | re.IGNORECASE
+        )
+        config_data = re.sub(
+            r"^[; \t]*proto udp",
+            "proto udp",
+            config_data,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
 
     temp_ovpn = "/tmp/vpngate-active.ovpn"
-    with open(temp_ovpn, 'w') as f:
+    with open(temp_ovpn, "w") as f:
         f.write(config_data)
 
-    subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+    subprocess.run(
+        ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+    )
 
-    import_res = subprocess.run(["nmcli", "connection", "import", "type", "openvpn", "file", temp_ovpn], capture_output=True, text=True)
+    import_res = subprocess.run(
+        ["nmcli", "connection", "import", "type", "openvpn", "file", temp_ovpn],
+        capture_output=True,
+        text=True,
+    )
 
     if import_res.returncode != 0:
         return False, f"Failed to import: {import_res.stderr}"
 
     remote_match = re.search(r"^remote\s+([\d\.]+)\s+(\d+)", config_data, re.MULTILINE)
-    remote_ip = remote_match.group(1) if remote_match else server['IP']
+    remote_ip = remote_match.group(1) if remote_match else server["IP"]
     remote_port = remote_match.group(2) if remote_match else "443"
 
-    subprocess.run(["nmcli", "connection", "modify", CONNECTION_NAME,
-                    "vpn.user-name", "vpn",
-                    "vpn.secrets", "password=vpn",
-                    "+vpn.data", f"auth=SHA1, cipher=AES-128-CBC, data-ciphers=AES-256-GCM:AES-128-GCM:AES-128-CBC, data-ciphers-fallback=AES-128-CBC, connection-type=password, remote={remote_ip}, port={remote_port}"], capture_output=True)
+    subprocess.run(
+        [
+            "nmcli",
+            "connection",
+            "modify",
+            CONNECTION_NAME,
+            "+vpn.data",
+            f"auth=SHA1, cipher=AES-128-CBC, data-ciphers=AES-256-GCM:AES-128-GCM:AES-128-CBC, data-ciphers-fallback=AES-128-CBC, remote={remote_ip}, port={remote_port}",
+        ],
+        capture_output=True,
+    )
 
     if _connect_cancelled:
-        subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+        subprocess.run(
+            ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+        )
         return False, "Connection cancelled."
 
     try:
         _connect_process = subprocess.Popen(
             ["timeout", "20s", "nmcli", "connection", "up", CONNECTION_NAME],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         stdout, stderr = _connect_process.communicate()
         retcode = _connect_process.returncode
         _connect_process = None
 
         if _connect_cancelled:
-            subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+            subprocess.run(
+                ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+            )
             return False, "Connection cancelled."
 
         if retcode == 0:
@@ -313,13 +387,19 @@ def connect_vpn(server, force_proto=None):
                 f.write(str(os.getpid()))
             return True, "Successfully connected!"
         elif retcode == 124:
-            subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+            subprocess.run(
+                ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+            )
             return False, "Connection timed out (>20s)."
         else:
-            subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+            subprocess.run(
+                ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+            )
             return False, f"Connection failed: {stderr}"
     except Exception as e:
-        subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+        subprocess.run(
+            ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+        )
         return False, str(e)
     finally:
         _connect_process = None
@@ -329,11 +409,17 @@ def connect_vpn(server, force_proto=None):
 
 def disconnect_vpn():
     if not is_active():
-        subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+        subprocess.run(
+            ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+        )
         return False, "No active VPN connection found."
 
-    subprocess.run(["nmcli", "connection", "down", CONNECTION_NAME], capture_output=True)
-    subprocess.run(["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True)
+    subprocess.run(
+        ["nmcli", "connection", "down", CONNECTION_NAME], capture_output=True
+    )
+    subprocess.run(
+        ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
+    )
     if os.path.exists(PID_FILE):
         os.remove(PID_FILE)
     return True, "VPN disconnected."

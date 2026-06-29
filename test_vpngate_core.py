@@ -1,7 +1,7 @@
 import unittest
 import os
-import json
 import vpngate_core as vpncore
+
 
 class TestVPNGateCore(unittest.TestCase):
     def setUp(self):
@@ -32,5 +32,6 @@ class TestVPNGateCore(unittest.TestCase):
         self.assertEqual(vpncore.get_sort_key(), "ping")
         self.assertEqual(vpncore.get_filter_country(), "JP")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
