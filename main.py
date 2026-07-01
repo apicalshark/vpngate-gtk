@@ -723,7 +723,7 @@ class VPNClientApp(Adw.Application):
             application_name="VPN Gate Client",
             application_icon="vpngate-gtk",
             developer_name="ApicalShark",
-            version="0.2.0",
+            version="0.3.0",
             copyright="© 2026 ApicalShark",
             website="https://github.com/apicalshark/vpngate-gtk",
             issue_url="https://github.com/apicalshark/vpngate-gtk/issues",
