@@ -11,6 +11,7 @@ API_URL_VPNGATE = "https://www.vpngate.net/api/iphone/"
 API_URL_OVPNPW = "https://api.ovpn.pw/csv"
 CONNECTION_NAME = "vpngate-active"
 PID_FILE = "/tmp/vpngate-gtk.pid"
+IPV6_STATE_FILE = "/tmp/vpngate-gtk-ipv6-state.json"
 CONFIG_PATH = os.path.expanduser("~/.config/vpngate-gtk/config.json")
 
 _connect_process = None
@@ -23,6 +24,7 @@ filter_country = None
 filter_region = None
 sort_key = "score"
 protocol = "all"
+ipv6_mode = "block_while_connected"  # block_while_connected | dont_block
 
 
 def _load_config():
@@ -32,7 +34,8 @@ def _load_config():
         filter_country, \
         filter_region, \
         sort_key, \
-        protocol
+        protocol, \
+        ipv6_mode
     try:
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
@@ -42,6 +45,7 @@ def _load_config():
             filter_region = cfg.get("filter_region", None)
             sort_key = cfg.get("sort_key", "score")
             protocol = cfg.get("protocol", "all")
+            ipv6_mode = cfg.get("ipv6_mode", "block_while_connected")
     except (FileNotFoundError, json.JSONDecodeError):
         pass
 
@@ -58,6 +62,7 @@ def _save_config():
                     "filter_region": filter_region,
                     "sort_key": sort_key,
                     "protocol": protocol,
+                    "ipv6_mode": ipv6_mode,
                 },
                 f,
                 indent=2,
@@ -130,6 +135,16 @@ def get_protocol():
 def set_protocol(value):
     global protocol
     protocol = value
+    _save_config()
+
+
+def get_ipv6_mode():
+    return ipv6_mode
+
+
+def set_ipv6_mode(value):
+    global ipv6_mode
+    ipv6_mode = value
     _save_config()
 
 
@@ -280,6 +295,100 @@ def get_stats():
     return up_speed, down_speed, ping_val, loss_val
 
 
+def _get_main_connection():
+    res = subprocess.run(
+        ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+        capture_output=True,
+        text=True,
+    )
+    for line in res.stdout.splitlines():
+        parts = line.split(":")
+        if len(parts) >= 3 and parts[0] != CONNECTION_NAME:
+            if parts[1] in ("802-3-ethernet", "802-11-wireless"):
+                return parts[0]
+    return None
+
+
+def _get_ipv6_method(connection_name):
+    res = subprocess.run(
+        ["nmcli", "-t", "-f", "ipv6.method", "connection", "show", connection_name],
+        capture_output=True,
+        text=True,
+    )
+    for line in res.stdout.splitlines():
+        if line.startswith("ipv6.method:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def _save_ipv6_state(connection_name, ipv6_method):
+    try:
+        with open(IPV6_STATE_FILE, "w") as f:
+            json.dump({"connection": connection_name, "ipv6_method": ipv6_method}, f)
+    except Exception:
+        pass
+
+
+def _load_ipv6_state():
+    try:
+        with open(IPV6_STATE_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _clear_ipv6_state():
+    try:
+        os.remove(IPV6_STATE_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def _disable_ipv6_on_main():
+    main_conn = _get_main_connection()
+    if not main_conn:
+        return False
+    ipv6_method = _get_ipv6_method(main_conn)
+    if not ipv6_method or ipv6_method == "disabled":
+        return False
+    _save_ipv6_state(main_conn, ipv6_method)
+    subprocess.run(
+        ["nmcli", "connection", "modify", main_conn, "ipv6.method", "disabled"],
+        capture_output=True,
+    )
+    subprocess.run(
+        ["nmcli", "connection", "up", main_conn],
+        capture_output=True,
+    )
+    return True
+
+
+def _restore_ipv6_on_main():
+    state = _load_ipv6_state()
+    if not state:
+        return
+    conn = state.get("connection")
+    method = state.get("ipv6_method")
+    if conn and method:
+        subprocess.run(
+            ["nmcli", "connection", "modify", conn, "ipv6.method", method],
+            capture_output=True,
+        )
+        subprocess.run(
+            ["nmcli", "connection", "up", conn],
+            capture_output=True,
+        )
+    _clear_ipv6_state()
+
+
+def recover_ipv6_on_startup():
+    if ipv6_mode == "block_while_connected" and os.path.exists(IPV6_STATE_FILE) and not is_active():
+        _restore_ipv6_on_main()
+
+
+recover_ipv6_on_startup()
+
+
 def cancel_connect():
     global _connect_process, _connect_cancelled
     _connect_cancelled = True
@@ -359,11 +468,26 @@ def connect_vpn(server, force_proto=None):
         capture_output=True,
     )
 
+    subprocess.run(
+        [
+            "nmcli",
+            "connection",
+            "modify",
+            CONNECTION_NAME,
+            "ipv6.method",
+            "disabled",
+        ],
+        capture_output=True,
+    )
+
     if _connect_cancelled:
         subprocess.run(
             ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
         )
         return False, "Connection cancelled."
+
+    if ipv6_mode != "dont_block":
+        _disable_ipv6_on_main()
 
     try:
         _connect_process = subprocess.Popen(
@@ -380,26 +504,30 @@ def connect_vpn(server, force_proto=None):
             subprocess.run(
                 ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
             )
+            if ipv6_mode == "block_while_connected":
+                _restore_ipv6_on_main()
             return False, "Connection cancelled."
 
         if retcode == 0:
             with open(PID_FILE, "w") as f:
                 f.write(str(os.getpid()))
             return True, "Successfully connected!"
-        elif retcode == 124:
-            subprocess.run(
-                ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
-            )
-            return False, "Connection timed out (>20s)."
         else:
             subprocess.run(
                 ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
             )
-            return False, f"Connection failed: {stderr}"
+            if ipv6_mode == "block_while_connected":
+                _restore_ipv6_on_main()
+            if retcode == 124:
+                return False, "Connection timed out (>20s)."
+            else:
+                return False, f"Connection failed: {stderr}"
     except Exception as e:
         subprocess.run(
             ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
         )
+        if ipv6_mode == "block_while_connected":
+            _restore_ipv6_on_main()
         return False, str(e)
     finally:
         _connect_process = None
@@ -412,6 +540,8 @@ def disconnect_vpn():
         subprocess.run(
             ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
         )
+        if ipv6_mode == "block_while_connected":
+            _restore_ipv6_on_main()
         return False, "No active VPN connection found."
 
     subprocess.run(
@@ -420,6 +550,8 @@ def disconnect_vpn():
     subprocess.run(
         ["nmcli", "connection", "delete", CONNECTION_NAME], capture_output=True
     )
+    if ipv6_mode == "block_while_connected":
+        _restore_ipv6_on_main()
     if os.path.exists(PID_FILE):
         os.remove(PID_FILE)
     return True, "VPN disconnected."

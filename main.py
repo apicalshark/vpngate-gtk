@@ -149,6 +149,7 @@ class VPNClientWindow(Adw.ApplicationWindow):
         menu = Gio.Menu.new()
         menu.append("Preferences", "win.preferences")
         menu.append("About", "app.about")
+        menu.append("Quit", "app.quit")
 
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("view-more-symbolic")
@@ -586,6 +587,21 @@ class VPNClientWindow(Adw.ApplicationWindow):
         minimize_row.connect("notify::active", self._on_pref_minimize_changed)
         group.add(minimize_row)
 
+        ipv6_row = Adw.ComboRow()
+        ipv6_row.set_title("IPv6 handling")
+        ipv6_row.set_subtitle("Block IPv6 traffic that bypasses the VPN tunnel")
+        ipv6_model = Gtk.StringList.new(
+            ["Blocked when connected", "Don't block"]
+        )
+        ipv6_row.set_model(ipv6_model)
+        ipv6_idx = {
+            "block_while_connected": 0,
+            "dont_block": 1,
+        }.get(vpncore.get_ipv6_mode(), 0)
+        ipv6_row.set_selected(ipv6_idx)
+        ipv6_row.connect("notify::selected", self._on_pref_ipv6_changed)
+        group.add(ipv6_row)
+
         filter_group = Adw.PreferencesGroup()
         filter_group.set_title("Filters")
 
@@ -638,6 +654,20 @@ class VPNClientWindow(Adw.ApplicationWindow):
     def _on_pref_minimize_changed(self, row, pspec):
         vpncore.set_minimize_on_close(row.get_active())
 
+    def _on_pref_ipv6_changed(self, row, pspec):
+        old_mode = vpncore.get_ipv6_mode()
+        new_mode = {0: "block_while_connected", 1: "dont_block"}.get(
+            row.get_selected(), "block_while_connected"
+        )
+        if new_mode == old_mode:
+            return
+        vpncore.set_ipv6_mode(new_mode)
+        if vpncore.is_active():
+            if old_mode != "dont_block" and new_mode == "dont_block":
+                vpncore._restore_ipv6_on_main()
+            elif old_mode == "dont_block" and new_mode != "dont_block":
+                vpncore._disable_ipv6_on_main()
+
     def _on_pref_country_changed(self, row, pspec):
         idx = row.get_selected()
         if 0 <= idx < len(self.country_entries):
@@ -679,9 +709,13 @@ class VPNClientApp(Adw.Application):
     def do_startup(self):
         Adw.Application.do_startup(self)
 
-        action = Gio.SimpleAction.new("about", None)
-        action.connect("activate", self._show_about)
-        self.add_action(action)
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self._show_about)
+        self.add_action(about_action)
+
+        quit_action = Gio.SimpleAction.new("quit", None)
+        quit_action.connect("activate", lambda *_: self.quit())
+        self.add_action(quit_action)
 
     def _show_about(self, action, param):
         about = Adw.AboutWindow(
@@ -720,8 +754,23 @@ if __name__ == "__main__":
         "Hide VPN Gate", callback=lambda: app.window.hide() if app.window else None
     )
     tray.add_menu_separator()
+    tray.add_menu_item(
+        "Disconnect VPN",
+        callback=lambda: app.window._on_disconnect() if app.window else None,
+    )
+    tray.add_menu_separator()
     tray.add_menu_item("Quit", callback=app.quit)
     tray.setup()
     app.tray = tray
+
+    import signal
+
+    def on_shutdown(sig, frame):
+        vpncore.disconnect_vpn()
+        vpncore._restore_ipv6_on_main()
+        app.quit()
+
+    signal.signal(signal.SIGINT, on_shutdown)
+    signal.signal(signal.SIGTERM, on_shutdown)
 
     sys.exit(app.run(sys.argv))
